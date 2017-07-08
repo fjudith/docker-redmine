@@ -54,7 +54,7 @@ Dockerfile to build a [Redmine](http://www.redmine.org/) container image.
 
 ## Version
 
-Current Version: **sameersbn/redmine:3.3.2-1**
+Current Version: **sameersbn/redmine:3.3.4**
 
 *P.S.: If your installation depends on various third party plugins, please stick with 2.6.xx series to avoid breakage.*
 

@@ -890,6 +890,12 @@ migrate_database() {
     exec_as_redmine mkdir -p ${REDMINE_DATA_DIR}/tmp/plugin_assets
     exec_as_redmine chmod -R 0755 ${REDMINE_DATA_DIR}/tmp
 
+    # execute plugins/pre-install.sh script
+    if [[ -f ${REDMINE_PLUGINS_DIR}/pre-install.sh ]]; then
+      echo "Executing plugins/pre-install.sh script..."
+      . ${REDMINE_PLUGINS_DIR}/pre-install.sh
+    fi
+
     echo "Migrating database. Please be patient, this could take a while..."
     exec_as_redmine bundle exec rake db:create >/dev/null
     exec_as_redmine bundle exec rake db:migrate >/dev/null
@@ -925,10 +931,10 @@ install_plugins() {
     fi
 
     # execute plugins/pre-install.sh script
-    if [[ -f ${REDMINE_PLUGINS_DIR}/pre-install.sh ]]; then
-      echo "Executing plugins/pre-install.sh script..."
-      . ${REDMINE_PLUGINS_DIR}/pre-install.sh
-    fi
+    #if [[ -f ${REDMINE_PLUGINS_DIR}/pre-install.sh ]]; then
+    #  echo "Executing plugins/pre-install.sh script..."
+    #  . ${REDMINE_PLUGINS_DIR}/pre-install.sh
+    #fi
 
     # install gems and migrate the plugins when plugins are added/removed
     CURRENT_SHA1=
