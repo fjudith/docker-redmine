@@ -891,8 +891,6 @@ migrate_database() {
     exec_as_redmine chmod -R 0755 ${REDMINE_DATA_DIR}/tmp
 
     # execute plugins/pre-install.sh script
-    ls -l ${REDMINE_PLUGINS_DIR}
-    cat ${REDMINE_PLUGINS_DIR}/pre-install.sh
     if [[ -f ${REDMINE_PLUGINS_DIR}/pre-install.sh ]]; then
       echo "Executing plugins/pre-install.sh script..."
       . ${REDMINE_PLUGINS_DIR}/pre-install.sh
