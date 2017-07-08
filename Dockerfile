@@ -29,7 +29,7 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DD270288B4E6030699E45F
       libmysqlclient18 libpq5 libyaml-0-2 libcurl3 libssl1.0.0 uuid-dev xz-utils \
       libxslt1.1 libffi6 zlib1g gsfonts gcc make libmagickwand-dev build-essential \
  && update-locale LANG=C.UTF-8 LC_MESSAGES=POSIX \
- && gem install --no-document bundler \
+ && gem install --no-document bundler
 
 
 # Download & Install Node.js 
