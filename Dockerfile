@@ -30,7 +30,18 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DD270288B4E6030699E45F
       libxslt1.1 libffi6 zlib1g gsfonts gcc make libmagickwand-dev build-essential \
  && update-locale LANG=C.UTF-8 LC_MESSAGES=POSIX \
  && gem install --no-document bundler \
- && rm -rf /var/lib/apt/lists/*
+
+
+# Download & Install Node.js 
+# https://www.rosehosting.com/blog/how-to-install-nodejs-bower-and-gulp-on-debian-8/su
+RUN curl -sL https://deb.nodesource.com/setup_6.x | bash && \ 	
+    apt-get -y install nodejs && \
+    npm install bower -g && \
+    npm install gulp -g && \
+    npm install min -g && \
+    npm install css -g && \
+    npm install js -g && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY assets/build/ ${REDMINE_BUILD_DIR}/
 RUN bash ${REDMINE_BUILD_DIR}/install.sh
