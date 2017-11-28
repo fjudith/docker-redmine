@@ -127,7 +127,9 @@ redmine_finalize_database_parameters() {
     DB_USER=${DB_USER:-${POSTGRESQL_ENV_POSTGRES_USER}}
     DB_PASS=${DB_PASS:-${POSTGRESQL_ENV_POSTGRES_PASSWORD}}
     DB_NAME=${DB_NAME:-${POSTGRESQL_ENV_POSTGRES_DB}}
-    DB_NAME=${DB_NAME:-${POSTGRESQL_ENV_POSTGRES_USER}}
+    #TODO: Probally BUG Let See if some one has errors 
+    #i don't get errors
+    #DB_NAME=${DB_NAME:-${POSTGRESQL_ENV_POSTGRES_USER}}
 
     # support for linked sameersbn/postgresql image
     DB_USER=${DB_USER:-${POSTGRESQL_ENV_DB_USER}}
@@ -387,7 +389,10 @@ redmine_configure_incoming_email() {
         false) INCOMING_EMAIL_PRIVATE=0 ;;
       esac
 
-      INCOMING_EMAIL_OPTIONS="${INCOMING_EMAIL_UNKNOWN_USER:+unknown_user=${INCOMING_EMAIL_UNKNOWN_USER}} \
+      INCOMING_EMAIL_OPTIONS="${IMAP_FOLDER:+folder=${IMAP_FOLDER}} \
+        ${IMAP_MOVE_ON_SUCCESS:+move_on_success=${IMAP_MOVE_ON_SUCCESS}} \
+        ${IMAP_MOVE_ON_FAILURE:+move_on_failure=${IMAP_MOVE_ON_FAILURE}} \
+        ${INCOMING_EMAIL_UNKNOWN_USER:+unknown_user=${INCOMING_EMAIL_UNKNOWN_USER}} \
         ${INCOMING_EMAIL_NO_PERMISSION_CHECK:+no_permission_check=${INCOMING_EMAIL_NO_PERMISSION_CHECK}} \
         ${INCOMING_EMAIL_NO_ACCOUNT_NOTICE:+no_account_notice=${INCOMING_EMAIL_NO_ACCOUNT_NOTICE}} \
         ${INCOMING_EMAIL_DEFAULT_GROUP:+default_group=${INCOMING_EMAIL_DEFAULT_GROUP}} \
@@ -398,7 +403,7 @@ redmine_configure_incoming_email() {
         ${INCOMING_EMAIL_PRIORITY:+priority=${INCOMING_EMAIL_PRIORITY}} \
         ${INCOMING_EMAIL_PRIVATE:+private=${INCOMING_EMAIL_PRIVATE}} \
         ${INCOMING_EMAIL_ALLOW_OVERRIDE:+allow_override=${INCOMING_EMAIL_ALLOW_OVERRIDE}}"
-      echo "*/${IMAP_INTERVAL} * * * * cd ${REDMINE_HOME}/redmine && bundle exec rake redmine:email:receive_imap host=${IMAP_HOST} port=${IMAP_PORT} ssl=${IMAP_SSL} username=${IMAP_USER} password=${IMAP_PASS} ${INCOMING_EMAIL_OPTIONS} RAILS_ENV=${RAILS_ENV} >> ${REDMINE_LOG_DIR}/redmine/cron_rake.log 2>&1" >>/tmp/cron.${REDMINE_USER}
+      echo "*/${IMAP_INTERVAL} * * * * cd ${REDMINE_HOME}/redmine && bundle exec rake redmine:email:receive_imap host=${IMAP_HOST} port=${IMAP_PORT} ssl=${IMAP_SSL} starttls=${IMAP_STARTTLS} username=${IMAP_USER} password=${IMAP_PASS} ${INCOMING_EMAIL_OPTIONS} RAILS_ENV=${RAILS_ENV} >> ${REDMINE_LOG_DIR}/redmine/cron_rake.log 2>&1" >>/tmp/cron.${REDMINE_USER}
     fi
     crontab -u ${REDMINE_USER} /tmp/cron.${REDMINE_USER}
     rm -rf /tmp/cron.${REDMINE_USER}
@@ -462,70 +467,6 @@ redmine_configure_backups() {
   redmine_configure_backups_schedule
 }
 
-nginx_configure_redmine_ssl() {
-  if [[ ${REDMINE_HTTPS} == true && -f ${SSL_CERTIFICATE_PATH} && -f ${SSL_KEY_PATH} ]]; then
-    echo "Configuring nginx::redmine::ssl..."
-
-    if [[ ! -f ${SSL_CA_CERTIFICATES_PATH} ]]; then
-      sed -i "/{{SSL_CA_CERTIFICATES_PATH}}/d" ${REDMINE_NGINX_CONFIG}
-    fi
-
-    if [[ ! -f ${SSL_DHPARAM_PATH} ]]; then
-      sed -i "/{{SSL_DHPARAM_PATH}}/d" ${REDMINE_NGINX_CONFIG}
-    fi
-
-    update_template ${REDMINE_NGINX_CONFIG} \
-      SSL_CERTIFICATE_PATH \
-      SSL_KEY_PATH \
-      SSL_DHPARAM_PATH \
-      SSL_VERIFY_CLIENT \
-      SSL_CA_CERTIFICATES_PATH
-  fi
-}
-
-nginx_configure_redmine_hsts() {
-  if [[ ${REDMINE_HTTPS} == true ]]; then
-    echo "Configuring nginx::redmine::hsts..."
-    if [[ ${NGINX_HSTS_ENABLED} != true ]]; then
-      sed -i "/{{NGINX_HSTS_MAXAGE}}/d" ${REDMINE_NGINX_CONFIG}
-    fi
-    update_template ${REDMINE_NGINX_CONFIG} NGINX_HSTS_MAXAGE
-  else
-    sed -i "/{{NGINX_HSTS_MAXAGE}}/d" ${REDMINE_NGINX_CONFIG}
-  fi
-}
-
-nginx_configure_redmine_relative_url() {
-  if [[ ${REDMINE_RELATIVE_URL_ROOT} != / ]]; then
-    echo "Configuring nginx::redmine::relative_url..."
-  fi
-  update_template ${REDMINE_NGINX_CONFIG} REDMINE_RELATIVE_URL_ROOT
-}
-
-nginx_configure_redmine_ipv6() {
-  if [[ ! -f /proc/net/if_inet6 ]]; then
-    sed -i \
-      -e "/listen \[::\]:80/d" \
-      -e "/listen \[::\]:443/d" \
-      ${REDMINE_NGINX_CONFIG}
-  fi
-}
-
-nginx_configure_redmine() {
-  echo "Configuring nginx::redmine..."
-  update_template ${REDMINE_NGINX_CONFIG} \
-    REDMINE_INSTALL_DIR \
-    REDMINE_LOG_DIR \
-    REDMINE_PORT \
-    NGINX_MAX_UPLOAD_SIZE \
-    NGINX_X_FORWARDED_PROTO
-
-  nginx_configure_redmine_ssl
-  nginx_configure_redmine_hsts
-  nginx_configure_redmine_relative_url
-  nginx_configure_redmine_ipv6
-}
-
 backup_dump_database() {
   eval $(parse_yaml ${REDMINE_CONFIG} config_)
   eval $(parse_yaml ${REDMINE_DATABASE_CONFIG} database_)
@@ -578,7 +519,7 @@ backup_create_archive() {
 
   echo "Creating backup archive: ${tar_file}..."
   exec_as_redmine tar -cf ${config_default_backup_storage_path}/${tar_file} -C ${config_default_backup_storage_path} $@
-  exec_as_redmine chmod 0755 ${config_default_backup_storage_path}/${tar_file}
+  exec_as_redmine chmod 0644 ${config_default_backup_storage_path}/${tar_file}
 
   for f in $@
   do
@@ -711,41 +652,41 @@ map_uidgid() {
 initialize_logdir() {
   echo "Initializing logdir..."
   mkdir -p ${REDMINE_LOG_DIR}/supervisor
-  chmod -R 0755 ${REDMINE_LOG_DIR}/supervisor
+  chmod -R u+rw,go+r ${REDMINE_LOG_DIR}/supervisor
   chown -R root: ${REDMINE_LOG_DIR}/supervisor
 
   mkdir -p ${REDMINE_LOG_DIR}/nginx
-  chmod -R 0755 ${REDMINE_LOG_DIR}/nginx
+  chmod -R u+rw,go+r ${REDMINE_LOG_DIR}/nginx
   chown -R ${REDMINE_USER}: ${REDMINE_LOG_DIR}/nginx
 
   mkdir -p ${REDMINE_LOG_DIR}/redmine
-  chmod -R 0755 ${REDMINE_LOG_DIR}/redmine
+  chmod -R u+rw,go+r ${REDMINE_LOG_DIR}/redmine
   chown -R ${REDMINE_USER}: ${REDMINE_LOG_DIR}/redmine
 }
 
 initialize_datadir() {
   echo "Initializing datadir..."
-  chmod -R 0755 ${REDMINE_DATA_DIR}
+  chmod -R u+rw,go+r ${REDMINE_DATA_DIR}
   chown -R ${REDMINE_USER}: ${REDMINE_DATA_DIR}
 
   # create plugins directory
   mkdir -p ${REDMINE_PLUGINS_DIR}
-  chmod -R 0755 ${REDMINE_PLUGINS_DIR}
+  chmod -R u+rw,go+r ${REDMINE_PLUGINS_DIR}
   chown -R ${REDMINE_USER}: ${REDMINE_PLUGINS_DIR}
 
   # create themes directory
   mkdir -p ${REDMINE_THEMES_DIR}
-  chmod -R 0755 ${REDMINE_THEMES_DIR}
+  chmod -R u+rw,go+r ${REDMINE_THEMES_DIR}
   chown -R ${REDMINE_USER}: ${REDMINE_THEMES_DIR}
 
   # create attachments directory
   mkdir -p ${REDMINE_ATTACHMENTS_DIR}
-  chmod -R 0755 ${REDMINE_ATTACHMENTS_DIR}
+  chmod -R u+rw,go+r ${REDMINE_ATTACHMENTS_DIR}
   chown -R ${REDMINE_USER}: ${REDMINE_ATTACHMENTS_DIR}
 
   # create backups directory
   mkdir -p ${REDMINE_BACKUPS_DIR}
-  chmod -R 0755 ${REDMINE_BACKUPS_DIR}
+  chmod -R u+rw,go+r ${REDMINE_BACKUPS_DIR}
   chown -R ${REDMINE_USER}: ${REDMINE_BACKUPS_DIR}
 
   if [[ -d /redmine/files ]]; then # deprecated
@@ -757,20 +698,20 @@ initialize_datadir() {
 
   # create dotfiles directory
   mkdir -p ${REDMINE_DOTFILES_DIR}
-  chmod -R 0755 ${REDMINE_DOTFILES_DIR}
+  chmod -R u+rw,go+r ${REDMINE_DOTFILES_DIR}
   chown -R ${REDMINE_USER}: ${REDMINE_DOTFILES_DIR}
 
   mkdir -p ${REDMINE_DOTFILES_DIR}/.ssh
-  chmod -R 0700 ${REDMINE_DOTFILES_DIR}/.ssh
+  chmod -R u+rw,go-rwx ${REDMINE_DOTFILES_DIR}/.ssh
   chown -R ${REDMINE_USER}: ${REDMINE_DOTFILES_DIR}/.ssh
 
   mkdir -p ${REDMINE_DOTFILES_DIR}/.subversion
-  chmod -R 0755 ${REDMINE_DOTFILES_DIR}/.subversion
+  chmod -R u+rw,go+r ${REDMINE_DOTFILES_DIR}/.subversion
   chown -R ${REDMINE_USER}: ${REDMINE_DOTFILES_DIR}/.subversion
 
   # create tmp directory
   mkdir -p ${REDMINE_DATA_DIR}/tmp
-  chmod -R 0755 ${REDMINE_DATA_DIR}/tmp
+  chmod -R u+rw,go+r ${REDMINE_DATA_DIR}/tmp
   chown -R ${REDMINE_USER}: ${REDMINE_DATA_DIR}/tmp
 }
 
@@ -857,6 +798,73 @@ configure_redmine() {
   rm -rf ${REDMINE_INSTALL_DIR}/tmp/sockets/redmine.socket
 }
 
+nginx_configure_redmine_ssl() {
+  if [[ ${REDMINE_HTTPS} == true && -f ${SSL_CERTIFICATE_PATH} && -f ${SSL_KEY_PATH} ]]; then
+    echo "Configuring nginx::redmine::ssl..."
+
+    if [[ ! -f ${SSL_CA_CERTIFICATES_PATH} ]]; then
+      sed -i "/{{SSL_CA_CERTIFICATES_PATH}}/d" ${REDMINE_NGINX_CONFIG}
+    fi
+
+    if [[ ! -f ${SSL_DHPARAM_PATH} ]]; then
+      sed -i "/{{SSL_DHPARAM_PATH}}/d" ${REDMINE_NGINX_CONFIG}
+    fi
+
+    update_template ${REDMINE_NGINX_CONFIG} \
+      SSL_CERTIFICATE_PATH \
+      SSL_KEY_PATH \
+      SSL_DHPARAM_PATH \
+      SSL_VERIFY_CLIENT \
+      SSL_CA_CERTIFICATES_PATH
+  fi
+}
+
+nginx_configure_redmine_hsts() {
+  if [[ ${REDMINE_HTTPS} == true ]]; then
+    echo "Configuring nginx::redmine::hsts..."
+    if [[ ${NGINX_HSTS_ENABLED} != true ]]; then
+      sed -i "/{{NGINX_HSTS_MAXAGE}}/d" ${REDMINE_NGINX_CONFIG}
+    fi
+    update_template ${REDMINE_NGINX_CONFIG} NGINX_HSTS_MAXAGE
+  else
+    sed -i "/{{NGINX_HSTS_MAXAGE}}/d" ${REDMINE_NGINX_CONFIG}
+  fi
+}
+
+nginx_configure_redmine_relative_url() {
+  if [[ ${REDMINE_RELATIVE_URL_ROOT} != / ]]; then
+    echo "Configuring nginx::redmine::relative_url..."
+    sed -i "s/## rewrite/rewrite/g" ${REDMINE_NGINX_CONFIG}
+  fi
+
+
+  update_template ${REDMINE_NGINX_CONFIG} REDMINE_RELATIVE_URL_ROOT
+}
+
+nginx_configure_redmine_ipv6() {
+  if [[ ! -f /proc/net/if_inet6 ]]; then
+    sed -i \
+      -e "/listen \[::\]:80/d" \
+      -e "/listen \[::\]:443/d" \
+      ${REDMINE_NGINX_CONFIG}
+  fi
+}
+
+nginx_configure_redmine() {
+  echo "Configuring nginx::redmine..."
+  update_template ${REDMINE_NGINX_CONFIG} \
+    REDMINE_INSTALL_DIR \
+    REDMINE_LOG_DIR \
+    REDMINE_PORT \
+    NGINX_MAX_UPLOAD_SIZE \
+    NGINX_X_FORWARDED_PROTO
+
+  nginx_configure_redmine_ssl
+  nginx_configure_redmine_hsts
+  nginx_configure_redmine_relative_url
+  nginx_configure_redmine_ipv6
+}
+
 configure_nginx() {
   if [[ ${NGINX_ENABLED} == true ]]; then
     echo "Configuring nginx..."
@@ -888,7 +896,7 @@ migrate_database() {
     exec_as_redmine mkdir -p ${REDMINE_DATA_DIR}/tmp
     exec_as_redmine mkdir -p ${REDMINE_DATA_DIR}/tmp/thumbnails
     exec_as_redmine mkdir -p ${REDMINE_DATA_DIR}/tmp/plugin_assets
-    exec_as_redmine chmod -R 0755 ${REDMINE_DATA_DIR}/tmp
+    exec_as_redmine chmod -R u+rw,go+r ${REDMINE_DATA_DIR}/tmp
 
     echo "Migrating database. Please be patient, this could take a while..."
     exec_as_redmine bundle exec rake db:create >/dev/null
