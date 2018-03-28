@@ -1,0 +1,326 @@
+##########################################################################
+# PostgreSQL
+##########################################################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: redmine
+    tiers: database
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: redmine
+    tiers: database
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redmine-db
+  labels:
+    app: redmine
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 512Mi
+  selector:
+    matchLabels:
+      app: redmine
+      tiers: database
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redmine-dblog
+  labels:
+    app: redmine
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 512Mi
+  selector:
+    matchLabels:
+      app: redmine
+      tiers: database
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redmine
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: redmine
+        tiers: database
+    spec:
+      containers:
+      - image: amd64/postgres:9.4
+        name: postgres
+        env:
+        - name: POSTGRES_DB
+          value: redmine
+        - name: POSTGRES_USER
+          value: redmine
+        # $ kubectl create secret generic postgres-pass --from-file=redmine.postgres.password.txt
+        # make sure postgres.password.txt does not have a trailing newline
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redmine-postgres-pass
+              key: redmine.postgres.password.txt
+        ports:
+        - containerPort: 5432
+          name: postgres
+        volumeMounts:
+        - name: redmine-db
+          mountPath: /var/lib/postgresql/data
+        - name: redmine-dblog
+          mountPath: /var/log/postgresql
+      volumes:
+      - name: redmine-db
+        persistentVolumeClaim:
+          claimName: redmine-db
+      - name: redmine-dblog
+        persistentVolumeClaim:
+          claimName: redmine-dblog
+---
+##########################################################################
+# Deployment (memcached)
+##########################################################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: memcached
+  labels:
+    app: wordpress
+spec:
+  ports:
+    - name: memcached-tcp
+      port: 11211
+      targetPort: 11211
+      protocol: TCP
+    - name: memcached-udp
+      port: 11211
+      targetPort: 11211
+      protocol: UDP
+  selector:
+    app: wordpress
+    tier: caching
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memcached
+  labels:
+    app: wordpress
+spec:
+  selector:
+    matchLabels:
+      app: wordpress
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: caching
+    spec:
+      containers:
+      - image: amd64/memcached:1.5
+        name: memcached
+        ports:
+        - containerPort: 11211
+          name: memcached-tcp
+          protocol: TCP
+        - containerPort: 11211
+          name: memcached-udp
+          protocol: UDP
+        livenessProbe:
+          tcpSocket:
+            port: 11211
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+---
+##########################################################################
+# Redmine
+##########################################################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: redmine
+  labels:
+    app: redmine
+    tiers: webapp
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  selector:
+    app: redmine
+    tiers: webapp
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: redmine
+  name: redmine-data
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 512Mi
+  selector:
+    matchLabels:
+      app: redmine
+      tiers: webapp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redmine
+  labels:
+    app: redmine
+    tiers: webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redmine
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: redmine
+        tiers: webapp
+    spec:
+      containers:
+      - image: fjudith/redmine
+        name: redmine
+        env: 
+        - name: TZ
+          value: Asia/Kolkata
+        - name: DB_ADAPTER
+          value: postgresql
+        - name: DB_HOST
+          value: postgres
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: redmine
+        - name: DB_NAME
+          value: redmine
+        # $ kubectl create secret generic postgres-pass --from-file=redmine.postgres.password.txt
+        # make sure postgres.password.txt does not have a trailing newline
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: redmine-postgres-pass
+              key: redmine.postgres.password.txt
+        - name: MEMCACHED_HOST
+          value: memcached
+        - name: MEMCACHED_PORT
+          value: "11211"
+        - name: REDMINE_PORT
+          value: 
+        - name: REDMINE_HTTPS
+          value: "false"
+        - name: REDMINE_RELATIVE_URL_ROOT
+          value: 
+        - name: REDMINE_SECRET_TOKEN
+          value: 
+        - name: REDMINE_SUDO_MODE_ENABLED
+          value: "false"
+        - name: REDMINE_SUDO_MODE_TIMEOUT
+          value: "15"
+        - name: REDMINE_CONCURRENT_UPLOADS
+          value: "2"
+        - name: REDMINE_BACKUP_SCHEDULE
+          value: 
+        - name: REDMINE_BACKUP_EXPIRY
+          value: 
+        - name: REDMINE_BACKUP_TIME
+          value: 
+        - name: SMTP_ENABLED
+          value: "false"
+        - name: SMTP_METHOD
+          value: "smtp"
+        - name: SMTP_DOMAIN
+          value: www.example.com
+        - name: SMTP_HOST
+          value: smtp.gmail.com
+        - name: SMTP_PORT
+          value: "587"
+        - name: SMTP_USER
+          value: mailer@example.com
+        - name: SMTP_PASS
+          valueFrom:
+            secretKeyRef:
+              name: redmine-smtp-pass
+              key: redmine.smtp.password.txt
+        - name: SMTP_STARTTLS
+          value: "true"
+        - name: SMTP_AUTHENTICATION
+          value: "login"
+        - name: SMTP_DOMAIN
+          value: www.example.com
+        - name: IMAP_ENABLED
+          value: "false"
+        - name: IMAP_HOST
+          value: imap.gmail.com
+        - name: IMAP_PORT
+          value: "993"
+        - name: IMAP_USER
+          value: mailer@example.com
+        - name: IMAP_PASS
+          valueFrom:
+            secretKeyRef:
+              name: redmine-imap-pass
+              key: redmine.imap.password.txt
+        - name: IMAP_SSL
+          value: "true"
+        - name: IMAP_INTERVAL
+          value: "30"
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: redmine-data
+          mountPath: /home/redmine/data
+        livenessProbe:
+          tcpSocket:
+              port: 80
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+        readinessProbe:
+          tcpSocket:
+            port: 80
+          timeoutSeconds: 5
+      volumes:
+      - name: redmine-data
+        persistentVolumeClaim:
+          claimName: redmine-data
+---

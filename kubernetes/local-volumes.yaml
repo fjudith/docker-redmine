@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redmine-db
+  labels:
+    type: local
+    app: redmine
+    tiers: database
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /tmp/data1/redmine-db
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redmine-dblog
+  labels:
+    type: local
+    app: redmine
+    tiers: database
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 1Gi
+  hostPath:
+    path: /tmp/data1/redmine-dblog
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redmine-data
+  labels:
+    type: local
+    app: redmine
+    tiers: webapp
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 1Gi
+  hostPath:
+    path: /tmp/data1/redmine-data
