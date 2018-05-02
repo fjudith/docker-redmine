@@ -1,5 +1,19 @@
 # Changelog
 
+**3.4.4-2**
+- Undo accidental change to REDMINE_VERSION
+
+**3.4.4-1**
+- nginx: Fix REDMINE_RELATIVE_URL_ROOT #324
+
+**3.4.4**
+- redmine: upgrade to v.3.4.4
+
+**3.4.3**
+- Add docker-compose-mysql.yml
+- Fixes REDMINE_RELATIVE_URL_ROOT breaks nginx handling files #240
+- redmine: upgrade to v.3.4.3
+
 **3.4.2**
 - redmine: upgrade to v.3.4.4
 
