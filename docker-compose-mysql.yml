@@ -2,7 +2,7 @@ version: '2'
 
 services:
   mysql:
-    image: sameersbn/mysql:latest
+    image: sameersbn/mysql:5.7.22-1
     environment:
     - DB_USER=redmine
     - DB_PASS=password
@@ -11,7 +11,8 @@ services:
     - /srv/docker/redmine/mysql:/var/lib/mysql
 
   redmine:
-    image: sameersbn/redmine:3.4.4-2
+    build: ./
+    image: sameersbn/redmine:4.0.4
     depends_on:
     - mysql
     environment:
